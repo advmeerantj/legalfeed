@@ -1,158 +1,160 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Lawyer Reader</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f9f9f9; color: #333; }
-    header { background: #2c3e50; color: #fff; padding: 10px; text-align: center; }
-    nav { display: flex; justify-content: center; background: #34495e; }
-    nav button { flex: 1; padding: 10px; background: #34495e; border: none; color: white; cursor: pointer; }
-    nav button.active { background: #1abc9c; }
-    #content { padding: 15px; }
-    .card { background: #fff; padding: 15px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .dark-mode { background: #181818; color: #eee; }
-    .dark-mode .card { background: #222; color: #eee; }
-    .top-right { position: absolute; top: 10px; right: 10px; display: flex; gap: 10px; }
-    .top-right button { background: #1abc9c; border: none; color: white; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
-    footer { background: #2c3e50; color: white; padding: 10px; text-align: center; font-size: 14px; }
+    body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f9f9f9; color:#333; }
+    header { background:#222; color:#fff; padding:10px; display:flex; justify-content:space-between; align-items:center; }
+    header h1 { font-size:20px; margin:0; }
+    .buttons { display:flex; gap:10px; }
+    .tabs { display:flex; background:#ddd; border-bottom:2px solid #bbb; }
+    .tab { padding:10px; cursor:pointer; flex:1; text-align:center; background:#ccc; border-right:1px solid #bbb; }
+    .tab.active { background:#fff; font-weight:bold; }
+    .hidden { display:none; }
+    .feed-container { padding:10px; }
+    .card { background:#fff; margin:10px 0; padding:15px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
+    .card h3 { margin:0 0 10px; font-size:16px; }
+    .card p { font-size:14px; color:#555; }
+    .card a { color:#0066cc; text-decoration:none; }
+    .loading { text-align:center; padding:20px; color:#777; }
+    #last-updated { font-size:12px; color:#777; padding:5px 10px; }
   </style>
 </head>
 <body>
 
-  <!-- ✅ API Test Box will appear here -->
-  <script>
-  async function testAPI() {
-    const apiUrl = "https://legalfeed.vercel.app/api/feeds";
+<header>
+  <h1>Lawyer Reader</h1>
+  <div class="buttons">
+    <button id="refresh">🔄 Refresh</button>
+    <button id="toggle-night">🌙</button>
+  </div>
+</header>
+
+<div class="tabs" id="tabs"></div>
+<div id="last-updated"></div>
+<div id="content" class="feed-container"></div>
+
+<script>
+const apiBase = "https://legalfeed.vercel.app/api/feeds";
+const sources = {
+  lawweb: "Law Web",
+  livelaw: "LiveLaw",
+  barandbench: "Bar & Bench",
+  ipleaders: "iPleaders",
+  indiankanoon: "Indian Kanoon",
+  casemine: "Casemine"
+};
+
+const tabsContainer = document.getElementById("tabs");
+const content = document.getElementById("content");
+const lastUpdated = document.getElementById("last-updated");
+let feedsData = {};
+let currentTab = null;
+
+// Fetch feeds
+async function fetchFeeds() {
+  tabsContainer.innerHTML = "";
+  content.innerHTML = "<div class='loading'>Loading feeds...</div>";
+  feedsData = {};
+
+  for (const [key, name] of Object.entries(sources)) {
     try {
-      const res = await fetch(apiUrl);
-      if (!res.ok) throw new Error("API not reachable: " + res.status);
+      const res = await fetch(`${apiBase}?site=${key}`);
       const data = await res.json();
-      console.log("✅ API Connected. Example feed:", data[0] || data);
-      const testBox = document.createElement("div");
-      testBox.style.background = "#222";
-      testBox.style.color = "#0f0";
-      testBox.style.padding = "10px";
-      testBox.innerText = "API Connected ✔ Example Title: " + (data[0]?.title || "No data");
-      document.body.prepend(testBox);
+
+      if (data.items && data.items.length > 0) {
+        feedsData[key] = data.items;
+        addTab(key, name);
+      }
     } catch (err) {
-      console.error("❌ API Test Failed:", err);
-      const testBox = document.createElement("div");
-      testBox.style.background = "#222";
-      testBox.style.color = "red";
-      testBox.style.padding = "10px";
-      testBox.innerText = "API Connection Failed ❌ " + err.message;
-      document.body.prepend(testBox);
+      console.error(`Failed loading ${name}`, err);
     }
   }
-  testAPI();
-  </script>
 
-  <header>
-    <h1>Lawyer Reader</h1>
-    <div class="top-right">
-      <button onclick="toggleDarkMode()">🌙</button>
-      <button onclick="showCacheSize()">💾</button>
-    </div>
-  </header>
+  // Restore last opened tab or pick first available
+  let lastTab = localStorage.getItem("lastTab");
+  if (lastTab && feedsData[lastTab]) {
+    showTab(lastTab);
+  } else {
+    const firstKey = Object.keys(feedsData)[0];
+    if (firstKey) showTab(firstKey);
+  }
 
-  <nav>
-    <button onclick="showTab('livelaw')" class="active">LiveLaw</button>
-    <button onclick="showTab('barbench')">Bar & Bench</button>
-    <button onclick="showTab('ipleaders')">iPleaders</button>
-    <button onclick="showTab('supremetoday')">SupremeToday</button>
-    <button onclick="showTab('sconline')">SCC Online</button>
-    <button onclick="showTab('indiankanoon')">Indian Kanoon</button>
-    <button onclick="showTab('casemine')">Casemine</button>
-    <button onclick="showTab('favorites')">Favorites</button>
-  </nav>
+  lastUpdated.textContent = "Last updated: " + new Date().toLocaleString();
+}
 
-  <div id="content"></div>
+// Add tab dynamically
+function addTab(key, name) {
+  const tab = document.createElement("div");
+  tab.className = "tab";
+  tab.textContent = name;
+  tab.onclick = () => {
+    showTab(key);
+    localStorage.setItem("lastTab", key); // save last opened tab
+  };
+  tab.id = `tab-${key}`;
+  tabsContainer.appendChild(tab);
+}
 
-  <footer>
-    Lawyer Reader © 2025 | Last Updated: <span id="lastUpdated">Loading...</span>
-  </footer>
+// Show tab content
+function showTab(key) {
+  currentTab = key;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.getElementById(`tab-${key}`).classList.add("active");
+  renderFeed(key);
+}
 
-  <script>
-    const feeds = {
-      livelaw: "https://www.livelaw.in/rssfeed",
-      barbench: "https://www.barandbench.com/feed",
-      ipleaders: "https://blog.ipleaders.in/feed/",
-      supremetoday: "https://www.supremetoday.ai/rss",
-      sconline: "https://www.scconline.com/feed/",
-      indiankanoon: "https://legalfeed.vercel.app/api/feeds?site=indiankanoon",
-      casemine: "https://legalfeed.vercel.app/api/feeds?site=casemine"
-    };
+// Render feed items
+function renderFeed(key) {
+  const items = feedsData[key] || [];
+  content.innerHTML = "";
 
-    async function loadFeed(site) {
-      const content = document.getElementById("content");
-      content.innerHTML = "<p>Loading...</p>";
-      try {
-        const res = await fetch(feeds[site]);
-        const data = await res.json();
-        content.innerHTML = "";
-        data.forEach(item => {
-          const card = document.createElement("div");
-          card.className = "card";
-          card.innerHTML = `<h3>${item.title}</h3>
-            <p>${item.contentSnippet || ""}</p>
-            <a href="${item.link}" target="_blank">Read More</a>
-            <button onclick="saveFavorite('${site}','${item.title}','${item.link}')">⭐ Favorite</button>`;
-          content.appendChild(card);
-        });
-        document.getElementById("lastUpdated").innerText = new Date().toLocaleString();
-      } catch (err) {
-        content.innerHTML = "<p style='color:red'>Failed to load feed ❌</p>";
-        console.error(err);
-      }
-    }
+  if (items.length === 0) {
+    content.innerHTML = "<div class='loading'>No content available.</div>";
+    return;
+  }
 
-    function showTab(site) {
-      document.querySelectorAll("nav button").forEach(btn => btn.classList.remove("active"));
-      event.target.classList.add("active");
-      if (site === "favorites") {
-        loadFavorites();
-      } else {
-        loadFeed(site);
-      }
-    }
+  items.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <h3><a href="${item.link}" target="_blank">${item.title}</a></h3>
+      <p>${item.contentSnippet || ""}</p>
+      <small>${item.pubDate || ""}</small>
+    `;
+    content.appendChild(card);
+  });
+}
 
-    function saveFavorite(site, title, link) {
-      const favs = JSON.parse(localStorage.getItem("favorites")) || [];
-      favs.push({ site, title, link });
-      localStorage.setItem("favorites", JSON.stringify(favs));
-      alert("Added to favorites!");
-    }
+// Night mode toggle
+document.getElementById("toggle-night").onclick = () => {
+  document.body.classList.toggle("night");
+  if (document.body.classList.contains("night")) {
+    document.body.style.background = "#111";
+    document.body.style.color = "#eee";
+    document.querySelectorAll(".card").forEach(c => {
+      c.style.background = "#222";
+      c.style.color = "#eee";
+    });
+  } else {
+    document.body.style.background = "#f9f9f9";
+    document.body.style.color = "#333";
+    document.querySelectorAll(".card").forEach(c => {
+      c.style.background = "#fff";
+      c.style.color = "#333";
+    });
+  }
+};
 
-    function loadFavorites() {
-      const favs = JSON.parse(localStorage.getItem("favorites")) || [];
-      const content = document.getElementById("content");
-      content.innerHTML = "<h2>Favorites</h2>";
-      favs.forEach(f => {
-        const card = document.createElement("div");
-        card.className = "card";
-        card.innerHTML = `<h3>${f.title}</h3><a href="${f.link}" target="_blank">Read More</a>`;
-        content.appendChild(card);
-      });
-    }
+// Refresh button
+document.getElementById("refresh").onclick = () => {
+  fetchFeeds();
+};
 
-    function toggleDarkMode() {
-      document.body.classList.toggle("dark-mode");
-    }
-
-    function showCacheSize() {
-      let _lsTotal = 0, _xLen, _x;
-      for (_x in localStorage) {
-        if (!localStorage.hasOwnProperty(_x)) continue;
-        _xLen = ((localStorage[_x].length + _x.length) * 2);
-        _lsTotal += _xLen;
-      }
-      alert("Cache size: " + (_lsTotal / 1024).toFixed(2) + " KB");
-    }
-
-    loadFeed("livelaw");
-  </script>
-
+// Start
+fetchFeeds();
+</script>
 </body>
 </html>
