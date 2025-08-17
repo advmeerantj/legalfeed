@@ -1,94 +1,95 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Lawyer Feed</title>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Legal Feed Reader</title>
   <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f9f9f9; color:#333; }
-    header { background:#222; color:#fff; padding:10px; display:flex; justify-content:space-between; align-items:center; }
-    header h1 { font-size:20px; margin:0; }
-    .buttons { display:flex; gap:10px; }
+    :root {
+      --bg: #f9f9f9;
+      --fg: #333;
+      --card1: #fff;
+      --card2: #e8e8e8;
+      --highlight: #007bff;
+    }
+    body { font-family: Arial, sans-serif; margin:0; background:var(--bg); color:var(--fg); }
+    header { background: #222; color: #fff; padding:10px; display:flex; justify-content:space-between; align-items:center;}
+    header h1 { margin:0; font-size:1.4rem; }
+    .btns { display:flex; gap:10px; }
+    .btns button { background:var(--highlight); border:none; color:#fff; padding:5px 10px; cursor:pointer; border-radius:3px; }
+    #last-updated { font-size:0.9rem; padding:5px 10px; color:#666; }
     .feed-container { padding:10px; }
-    .card { background:#fff; margin:10px 0; padding:15px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
-    .card h3 { margin:0 0 10px; font-size:16px; }
-    .card p { font-size:14px; color:#555; }
-    .card a { color:#0066cc; text-decoration:none; }
-    .loading { text-align:center; padding:20px; color:#777; }
-    #last-updated { font-size:12px; color:#777; padding:5px 10px; }
+    .card { padding:15px; border-radius:5px; margin-bottom:10px; }
+    .card:nth-child(odd) { background:var(--card1); }
+    .card:nth-child(even) { background:var(--card2); }
+    .card h3 { margin:0; font-size:1.1rem; }
+    .card small { color:#777; }
+    .actions { margin-top:8px; display:flex; gap:8px; }
+    .actions button { background:none; border:none; cursor:pointer; color:var(--highlight); }
+    .night { background:#121212; color:#ddd; }
+    .night .card:nth-child(odd) { background:#1e1e1e; }
+    .night .card:nth-child(even) { background:#292929; }
+    .excerpt { max-height:3em; overflow:hidden; transition: max-height 0.3s; }
+    .expanded { max-height: none; }
   </style>
 </head>
 <body>
-
-<header>
-  <h1>Lawyer Feed</h1>
-  <div class="buttons">
-    <button id="refresh">🔄 Refresh</button>
-    <button id="toggle-night">🌙</button>
-  </div>
-</header>
-
-<div id="last-updated"></div>
-<div id="content" class="feed-container"></div>
-
-<script>
-const apiBase = "https://legalfeed.vercel.app/api/feeds";
-const content = document.getElementById("content");
-const lastUpdated = document.getElementById("last-updated");
-
-async function fetchFeeds() {
-  content.innerHTML = "<div class='loading'>Loading feeds...</div>";
-
-  try {
-    const res = await fetch(apiBase);
-    const items = await res.json();
-
-    if (!items || items.length === 0) {
-      content.innerHTML = "<div class='loading'>No feeds available.</div>";
-      return;
+  <header>
+    <h1>Legal Feed Reader</h1>
+    <div class="btns">
+      <button id="refresh">Refresh</button>
+      <button id="toggle-night">Night Mode</button>
+    </div>
+  </header>
+  <div id="last-updated"></div>
+  <div id="content" class="feed-container"></div>
+  <script>
+    const API = "https://legalfeed.vercel.app/api/feeds";
+    const content = document.getElementById("content");
+    const lastUpdated = document.getElementById("last-updated");
+    
+    async function load() {
+      content.innerHTML = "<p>Loading feeds…</p>";
+      const items = await fetch(API).then(r => r.json()).catch(e => { content.innerHTML="<p>Failed to load.</p>"; return []; });
+      content.innerHTML = "";
+      items.forEach((it,i)=>{
+        const card=document.createElement("div"); card.className="card";
+        card.innerHTML=`
+          <h3><a href="${it.link}" target="_blank" onclick="markRead(${i})">${it.title}</a></h3>
+          <small>${new Date(it.pubDate).toLocaleString()} — ${it.source}</small>
+          <div id="excerpt-${i}" class="excerpt">${it.contentSnippet}</div>
+          <button onclick="toggleRead(${i})" id="btn-${i}">Read More</button>
+          <div class="actions">
+            <button onclick="share('${encodeURIComponent(it.title)}','${encodeURIComponent(it.link)}')">Share</button>
+            <button onclick="pdf('${encodeURIComponent(it.link)}')">PDF</button>
+            <button onclick="toggleFav(${i})">⭐</button>
+          </div>`;
+        content.appendChild(card);
+      });
+      lastUpdated.textContent="Last updated: "+new Date().toLocaleString();
     }
-
-    content.innerHTML = "";
-    items.forEach(item => {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = `
-        <h3><a href="${item.link}" target="_blank">${item.title}</a></h3>
-        <p>${item.contentSnippet}</p>
-        <small>${item.pubDate ? new Date(item.pubDate).toLocaleString() : ""} | <b>${item.source}</b></small>
-      `;
-      content.appendChild(card);
-    });
-
-    lastUpdated.textContent = "Last updated: " + new Date().toLocaleString();
-  } catch (err) {
-    console.error(err);
-    content.innerHTML = "<div class='loading'>Failed to load feeds.</div>";
-  }
-}
-
-document.getElementById("refresh").onclick = fetchFeeds;
-
-document.getElementById("toggle-night").onclick = () => {
-  document.body.classList.toggle("night");
-  if (document.body.classList.contains("night")) {
-    document.body.style.background = "#111";
-    document.body.style.color = "#eee";
-    document.querySelectorAll(".card").forEach(c => {
-      c.style.background = "#222";
-      c.style.color = "#eee";
-    });
-  } else {
-    document.body.style.background = "#f9f9f9";
-    document.body.style.color = "#333";
-    document.querySelectorAll(".card").forEach(c => {
-      c.style.background = "#fff";
-      c.style.color = "#333";
-    });
-  }
-};
-
-fetchFeeds();
-</script>
+    function toggleRead(i){
+      const ex=document.getElementById(`excerpt-${i}`);
+      const btn=document.getElementById(`btn-${i}`);
+      if(ex.classList.toggle("expanded")) btn.textContent="Read Less"; else btn.textContent="Read More";
+    }
+    function share(t,l){
+      navigator.share ? navigator.share({title:decodeURIComponent(t),url:decodeURIComponent(l)}) : prompt("Copy link:",decodeURIComponent(l));
+    }
+    function pdf(l){ window.open("https://www.printfriendly.com/p/g?url="+l,"_blank"); }
+    function toggleFav(i){
+      let f=JSON.parse(localStorage.getItem("favorites")||"[]");
+      f.includes(i) ? f=f.filter(x=>x!==i) : f.unshift(i);
+      localStorage.setItem("favorites",JSON.stringify(f));
+      alert("Favorites updated");
+    }
+    function markRead(i){
+      let r=JSON.parse(localStorage.getItem("read")||"[]");
+      if(!r.includes(i)) r.push(i);
+      localStorage.setItem("read",JSON.stringify(r));
+    }
+    document.getElementById("toggle-night").onclick=()=>document.body.classList.toggle("night");
+    document.getElementById("refresh").onclick=load;
+    load();
+  </script>
 </body>
 </html>
