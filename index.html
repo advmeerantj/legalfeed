@@ -3,16 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Lawyer Reader</title>
+  <title>Lawyer Feed</title>
   <style>
     body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f9f9f9; color:#333; }
     header { background:#222; color:#fff; padding:10px; display:flex; justify-content:space-between; align-items:center; }
     header h1 { font-size:20px; margin:0; }
     .buttons { display:flex; gap:10px; }
-    .tabs { display:flex; background:#ddd; border-bottom:2px solid #bbb; }
-    .tab { padding:10px; cursor:pointer; flex:1; text-align:center; background:#ccc; border-right:1px solid #bbb; }
-    .tab.active { background:#fff; font-weight:bold; }
-    .hidden { display:none; }
     .feed-container { padding:10px; }
     .card { background:#fff; margin:10px 0; padding:15px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
     .card h3 { margin:0 0 10px; font-size:16px; }
@@ -25,110 +21,54 @@
 <body>
 
 <header>
-  <h1>Lawyer Reader</h1>
+  <h1>Lawyer Feed</h1>
   <div class="buttons">
     <button id="refresh">🔄 Refresh</button>
     <button id="toggle-night">🌙</button>
   </div>
 </header>
 
-<div class="tabs" id="tabs"></div>
 <div id="last-updated"></div>
 <div id="content" class="feed-container"></div>
 
 <script>
 const apiBase = "https://legalfeed.vercel.app/api/feeds";
-const sources = {
-  lawweb: "Law Web",
-  livelaw: "LiveLaw",
-  barandbench: "Bar & Bench",
-  ipleaders: "iPleaders",
-  indiankanoon: "Indian Kanoon",
-  casemine: "Casemine"
-};
-
-const tabsContainer = document.getElementById("tabs");
 const content = document.getElementById("content");
 const lastUpdated = document.getElementById("last-updated");
-let feedsData = {};
-let currentTab = null;
 
-// Fetch feeds
 async function fetchFeeds() {
-  tabsContainer.innerHTML = "";
   content.innerHTML = "<div class='loading'>Loading feeds...</div>";
-  feedsData = {};
 
-  for (const [key, name] of Object.entries(sources)) {
-    try {
-      const res = await fetch(`${apiBase}?site=${key}`);
-      const data = await res.json();
+  try {
+    const res = await fetch(apiBase);
+    const items = await res.json();
 
-      if (data.items && data.items.length > 0) {
-        feedsData[key] = data.items;
-        addTab(key, name);
-      }
-    } catch (err) {
-      console.error(`Failed loading ${name}`, err);
+    if (!items || items.length === 0) {
+      content.innerHTML = "<div class='loading'>No feeds available.</div>";
+      return;
     }
+
+    content.innerHTML = "";
+    items.forEach(item => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <h3><a href="${item.link}" target="_blank">${item.title}</a></h3>
+        <p>${item.contentSnippet}</p>
+        <small>${item.pubDate ? new Date(item.pubDate).toLocaleString() : ""} | <b>${item.source}</b></small>
+      `;
+      content.appendChild(card);
+    });
+
+    lastUpdated.textContent = "Last updated: " + new Date().toLocaleString();
+  } catch (err) {
+    console.error(err);
+    content.innerHTML = "<div class='loading'>Failed to load feeds.</div>";
   }
-
-  // Restore last opened tab or pick first available
-  let lastTab = localStorage.getItem("lastTab");
-  if (lastTab && feedsData[lastTab]) {
-    showTab(lastTab);
-  } else {
-    const firstKey = Object.keys(feedsData)[0];
-    if (firstKey) showTab(firstKey);
-  }
-
-  lastUpdated.textContent = "Last updated: " + new Date().toLocaleString();
 }
 
-// Add tab dynamically
-function addTab(key, name) {
-  const tab = document.createElement("div");
-  tab.className = "tab";
-  tab.textContent = name;
-  tab.onclick = () => {
-    showTab(key);
-    localStorage.setItem("lastTab", key); // save last opened tab
-  };
-  tab.id = `tab-${key}`;
-  tabsContainer.appendChild(tab);
-}
+document.getElementById("refresh").onclick = fetchFeeds;
 
-// Show tab content
-function showTab(key) {
-  currentTab = key;
-  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-  document.getElementById(`tab-${key}`).classList.add("active");
-  renderFeed(key);
-}
-
-// Render feed items
-function renderFeed(key) {
-  const items = feedsData[key] || [];
-  content.innerHTML = "";
-
-  if (items.length === 0) {
-    content.innerHTML = "<div class='loading'>No content available.</div>";
-    return;
-  }
-
-  items.forEach(item => {
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `
-      <h3><a href="${item.link}" target="_blank">${item.title}</a></h3>
-      <p>${item.contentSnippet || ""}</p>
-      <small>${item.pubDate || ""}</small>
-    `;
-    content.appendChild(card);
-  });
-}
-
-// Night mode toggle
 document.getElementById("toggle-night").onclick = () => {
   document.body.classList.toggle("night");
   if (document.body.classList.contains("night")) {
@@ -148,12 +88,6 @@ document.getElementById("toggle-night").onclick = () => {
   }
 };
 
-// Refresh button
-document.getElementById("refresh").onclick = () => {
-  fetchFeeds();
-};
-
-// Start
 fetchFeeds();
 </script>
 </body>
