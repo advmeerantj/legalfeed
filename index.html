@@ -68,7 +68,7 @@ tabs.forEach(tab=>{ tab.addEventListener('click',()=>{
 // fetch feeds from server
 async function fetchFeeds(){
   try{
-    const res = await fetch('https://your-server-url/feeds'); // <-- replace with your deployed endpoint
+    const res = await fetch('https://legalfeed.vercel.app/api/feeds'); // <-- replace with your deployed endpoint
     const data = await res.json();
     feedsData = {};
     data.feeds.forEach(item=>{
